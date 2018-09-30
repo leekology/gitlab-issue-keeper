@@ -17,6 +17,7 @@ class Gitlab:
 
     def __init__(self, gitlab_url, gitlab_token):
         self.gitlab_url, self.gitlab_token = gitlab_url, gitlab_token
+        self.labels = {}
 
     def req_api(self, path):
         r = request.urlopen(request.Request(f'{self.gitlab_url}{path}', headers={
@@ -45,17 +46,22 @@ class Gitlab:
             x['system'] and x['body'] == f'removed ~{label_id} label'  # noqa
         ], key=lambda x: x['id'])
 
-        return starts[0]['updated_at'], min(ends1[-2:] + ends2[-2:])['updated_at']
+        ends = ends1[-2:] + ends2[-2:]
+
+        return starts[0]['updated_at'], min(ends, key=lambda x: x['id'])['updated_at'] if ends else None
 
     def list_issues(self):
-        r = self.req_api('/api/v4/projects/228/issues?page=1&per_page=100&state=opened')
+        r = self.req_api('/api/v4/projects/228/issues?page=1&per_page=100&state=all')
         for issue in r:
-            pass
+            iid = issue['iid']
+            start, end = self.get_doing_close_date(issue['iid'])
+            print('%04d: %s %s' % (iid, start, end))
 
     @property
     def labels_map(self):
-        labels = self.req_api('/api/v4/projects/228/labels') or []
-        return dict((x['name'], x['id']) for x in labels)
+        self.labels = self.labels or dict((x['name'], x['id']) for x in
+            self.req_api('/api/v4/projects/228/labels') or [])  # noqa
+        return self.labels
 
 
 if '__main__' == __name__:
