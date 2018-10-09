@@ -35,7 +35,7 @@ class Gitlab:
             params = urlencode(data)
             # stupid RESTful
             r = request.Request(f'{self.gitlab_url}{path}?{params}', headers=headers, method='PUT')
-        return json.loads(request.urlopen(r, timeout=2).read())
+        return json.loads(request.urlopen(r, timeout=4).read())
 
     def get_issue_notes(self, iid):
         r = self.req_api(f'/api/v4/projects/228/issues/{iid}/notes')
@@ -66,24 +66,41 @@ class Gitlab:
             iid = issue['iid']
             start, end = self.get_doing_close_date(issue['iid'])
             print('%04d: %s %s' % (iid, start, end))
-            gantt_str = ''
-            if start:
-                gantt_str = '%s\n%s%s' % (gantt_str, GANTT_START, start)
-            if end:
-                gantt_str = '%s\n%s%s' % (gantt_str, GANTT_END, end)
-            if gantt_str:
-                # remove old str
-                desc_back = '\n'.join(
-                    l for l in issue['description'].splitlines() if
-                    not (l.startswith(GANTT_START) or l.startswith(GANTT_END)))
-                desc = '%s\n\n<!--\n下面是issue耗时跟踪不要删\n%s\n-->' % (desc_back, gantt_str)
-                r = self.req_api(f'/api/v4/projects/228/issues/{iid}', {"description": desc})
+
+    def update_issue(self, issue, start, end):
+        gantt_str = ''
+        if start:
+            gantt_str = '%s\n%s%s' % (gantt_str, GANTT_START, start)
+        if end:
+            gantt_str = '%s\n%s%s' % (gantt_str, GANTT_END, end)
+        if start or end:
+            # remove old str
+            lines = []
+            inline_edit = False
+            for l in issue['description'].splitlines():
+                if l.startswith(GANTT_START) and start:
+                    lines.append(f'{GANTT_START}{start}')
+                    inline_edit = True
+                elif l.startswith(GANTT_END) and end:
+                    lines.append(f'{GANTT_END}{end}')
+                    inline_edit = True
+            desc_back = '\n'.join(lines)
+            desc = '%s\n\n<!--\n下面是issue耗时跟踪不要删\n%s\n-->' % (desc_back, gantt_str)
+            r = self.req_api(f'/api/v4/projects/228/issues/{issue["iid"]}', {"description": desc})
 
     @property
     def labels_map(self):
         self.labels = self.labels or dict((x['name'], x['id']) for x in
             self.req_api('/api/v4/projects/228/labels') or [])  # noqa
         return self.labels
+
+
+def output_json(padding):
+    data = []
+    if padding:
+        return '%s(%s)' % (padding, data)
+    else:
+        return data
 
 
 if '__main__' == __name__:
