@@ -38,7 +38,7 @@ class Gitlab:
         return json.loads(request.urlopen(r, timeout=4).read())
 
     def get_projects(self):
-        r = self.req_api('/api/v4/projects/')
+        r = self.req_api('/api/v4/projects/?membership=true&per_page=100')
         return dict((
             p["path_with_namespace"], {
                 "path": p["path_with_namespace"],
@@ -46,7 +46,8 @@ class Gitlab:
                 "namespace": p["namespace"].get("path"),
                 "last_activity_at": p["last_activity_at"],
                 "description": p["description"],
-                "url": p["web_url"]
+                "url": p["web_url"],
+                "id": p["id"],
             }
         ) for p in r if
             p["archived"] is False and p["namespace"].get("kind") == "group")
@@ -61,17 +62,17 @@ class Gitlab:
 
 
 class GitlabProject:
-    def __init__(self, url):
-        self.project_url = url
+    def __init__(self, project_id):
+        self.project_id = project_id
 
     @property
-    def labels_map(self, project_id):
+    def labels_map(self):
         self.labels = self.labels or dict((x['name'], x['id']) for x in
-            self.req_api(f'/api/v4/projects/{project_id}/labels') or [])  # noqa
+            self.req_api(f'/api/v4/projects/{self.project_id}/labels') or [])  # noqa
         return self.labels
 
     def get_issue_notes(self, iid):
-        r = self.req_api(f'/api/v4/projects/228/issues/{iid}/notes')
+        r = self.req_api(f'/api/v4/projects/{self.project_id}/issues/{iid}/notes')
         return r
 
     def get_doing_close_date(self, iid):
@@ -93,18 +94,19 @@ class GitlabProject:
 
         return starts[0]['updated_at'], min(ends, key=lambda x: x['id'])['updated_at'] if ends else None
 
-    def list_issues(self, project_id):
-        r = self.req_api(f'/api/v4/projects/{project_id}/issues?page=1&per_page=100&state=all')
+    def list_issues(self):
+        r = self.req_api(f'/api/v4/projects/{self.project_id}/issues?page=1&per_page=100&state=all')
         for issue in r:
             start, end = self.get_doing_close_date(issue['iid'])
             yield issue, start, end
 
     def update_issue(self, issue, start, end):
-        gantt_str = ''
-        if start:
-            gantt_str = '%s\n%s%s' % (gantt_str, GANTT_START, start)
-        if end:
-            gantt_str = '%s\n%s%s' % (gantt_str, GANTT_END, end)
+        """issue =  {iid: 1, description: "", project_id: 0}"""
+        # gantt_str = ''
+        # if start:
+        #     gantt_str = '%s\n%s%s' % (gantt_str, GANTT_START, start)
+        # if end:
+        #     gantt_str = '%s\n%s%s' % (gantt_str, GANTT_END, end)
         if start or end:
             # remove old str
             lines = []
