@@ -37,6 +37,39 @@ class Gitlab:
             r = request.Request(f'{self.gitlab_url}{path}?{params}', headers=headers, method='PUT')
         return json.loads(request.urlopen(r, timeout=4).read())
 
+    def get_projects(self):
+        r = self.req_api('/api/v4/projects/')
+        return dict((
+            p["path_with_namespace"], {
+                "path": p["path_with_namespace"],
+                "name": p["name"],
+                "namespace": p["namespace"].get("path"),
+                "last_activity_at": p["last_activity_at"],
+                "description": p["description"],
+                "url": p["web_url"]
+            }
+        ) for p in r if
+            p["archived"] is False and p["namespace"].get("kind") == "group")
+
+    @classmethod
+    def guess_progress(cls, issue):
+        total = issue["time_stats"].get("time_estimate")
+        if not total or total <= 0:
+            return
+        spent = issue["time_stats"].get("total_time_spent") or 0
+        return spent / total * 100
+
+
+class GitlabProject:
+    def __init__(self, url):
+        self.project_url = url
+
+    @property
+    def labels_map(self, project_id):
+        self.labels = self.labels or dict((x['name'], x['id']) for x in
+            self.req_api(f'/api/v4/projects/{project_id}/labels') or [])  # noqa
+        return self.labels
+
     def get_issue_notes(self, iid):
         r = self.req_api(f'/api/v4/projects/228/issues/{iid}/notes')
         return r
@@ -86,19 +119,6 @@ class Gitlab:
             desc_back = '\n'.join(lines)
             desc = '%s\n\n<!--\n下面是issue耗时跟踪不要删\n%s\n-->' % (desc_back, gantt_str)
             r = self.req_api(f'/api/v4/projects/{issue["project_id"]}/issues/{issue["iid"]}', {"description": desc})
-
-    def get_labels_map(self, project_id):
-        self.labels = self.labels or dict((x['name'], x['id']) for x in
-            self.req_api(f'/api/v4/projects/{project_id}/labels') or [])  # noqa
-        return self.labels
-
-    @classmethod
-    def guess_progress(cls, issue):
-        total = issue["time_stats"].get("time_estimate")
-        if not total or total <= 0:
-            return
-        spent = issue["time_stats"].get("total_time_spent") or 0
-        return spent / total * 100
 
 
 def output_json(data, padding=None):
