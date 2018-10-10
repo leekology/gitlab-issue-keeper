@@ -2,7 +2,7 @@
 <html>
 <head>
     <title>Gantt</title>
-    <link rel="stylesheet" href="frappe-gantt.css">
+    <link rel="stylesheet" href="css/frappe-gantt.css">
     
 </head>
 <body>
@@ -10,9 +10,9 @@
     <svg id="gantt"></svg>
   </div>
 
-<script src="moment.min.js"></script>
-<script src="snap.svg-min.js"></script>
-<script src="frappe-gantt.js"></script>
+<script src="js/moment.min.js"></script>
+<script src="js/snap.svg-min.js"></script>
+<script src="js/frappe-gantt.js"></script>
 
 <script>
 <!--
@@ -27,8 +27,11 @@ var tasks2 = [
     // dependencies: 'Task 2, Task 3'
   },
 ]
+var render_gantt = function(data){return new Gantt("#gantt", data);}
 
-// var gantt_chart = new Gantt("#gantt", tasks);
+var o = document.createElement("script")
+o.src="../data.json"
+document.body.appendChild(o)
 
 -->
 </script>

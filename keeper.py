@@ -60,12 +60,11 @@ class Gitlab:
 
         return starts[0]['updated_at'], min(ends, key=lambda x: x['id'])['updated_at'] if ends else None
 
-    def list_issues(self):
-        r = self.req_api('/api/v4/projects/228/issues?page=1&per_page=100&state=all')
+    def list_issues(self, project_id):
+        r = self.req_api(f'/api/v4/projects/{project_id}/issues?page=1&per_page=100&state=all')
         for issue in r:
-            iid = issue['iid']
             start, end = self.get_doing_close_date(issue['iid'])
-            print('%04d: %s %s' % (iid, start, end))
+            yield issue, start, end
 
     def update_issue(self, issue, start, end):
         gantt_str = ''
@@ -86,21 +85,28 @@ class Gitlab:
                     inline_edit = True
             desc_back = '\n'.join(lines)
             desc = '%s\n\n<!--\n下面是issue耗时跟踪不要删\n%s\n-->' % (desc_back, gantt_str)
-            r = self.req_api(f'/api/v4/projects/228/issues/{issue["iid"]}', {"description": desc})
+            r = self.req_api(f'/api/v4/projects/{issue["project_id"]}/issues/{issue["iid"]}', {"description": desc})
 
-    @property
-    def labels_map(self):
+    def get_labels_map(self, project_id):
         self.labels = self.labels or dict((x['name'], x['id']) for x in
-            self.req_api('/api/v4/projects/228/labels') or [])  # noqa
+            self.req_api(f'/api/v4/projects/{project_id}/labels') or [])  # noqa
         return self.labels
 
+    @classmethod
+    def guess_progress(cls, issue):
+        total = issue["time_stats"].get("time_estimate")
+        if not total or total <= 0:
+            return
+        spent = issue["time_stats"].get("total_time_spent") or 0
+        return spent / total * 100
 
-def output_json(padding):
-    data = []
+
+def output_json(data, padding=None):
     if padding:
-        return '%s(%s)' % (padding, data)
+        # @ToDo: add sanitize padding
+        return '%s(%s)' % (padding, json.dumps(data))
     else:
-        return data
+        return json.dumps(data)
 
 
 if '__main__' == __name__:
