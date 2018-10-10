@@ -16,6 +16,13 @@
 
 <script>
 <!--
+function getUrlVars() {
+  var vars = {};
+  var parts = window.location.href.replace(
+    /[?&]+([^=&]+)=([^&]*)/gi,
+    function(m,key,value) { vars[key] = value;});
+  return vars;
+}
 
 var tasks2 = [
   {
@@ -27,7 +34,24 @@ var tasks2 = [
     // dependencies: 'Task 2, Task 3'
   },
 ]
-var render_gantt = function(data){return new Gantt("#gantt", data);}
+var render_gantt = function(data){return new Gantt("#gantt", data, {
+    date_format: 'YYYY-MM-DD',
+    on_click: function (task) {
+        window.open(task.url);
+    },
+    custom_popup_html: null,
+    
+    custom_popup_html1: function(task) {
+      // the task object will contain the updated
+      // dates and progress value
+      return `
+        <div class="details-container">
+          <h5><a href="${task.url}">${task.name}</a></h5>
+          <p>${task.progress || 0}% completed!</p>
+        </div>
+      `;
+    }
+});}
 
 var o = document.createElement("script")
 o.src="../data.json"

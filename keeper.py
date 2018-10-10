@@ -21,7 +21,6 @@ class Gitlab:
 
     def __init__(self, gitlab_url, gitlab_token):
         self.gitlab_url, self.gitlab_token = gitlab_url, gitlab_token
-        self.labels = {}
 
     def req_api(self, path, data=None):
         headers = {
@@ -62,17 +61,19 @@ class Gitlab:
 
 
 class GitlabProject:
-    def __init__(self, project_id):
+    def __init__(self, gitlab_obj, project_id):
         self.project_id = project_id
+        self.gitlab_obj = gitlab_obj
 
     @property
     def labels_map(self):
-        self.labels = self.labels or dict((x['name'], x['id']) for x in
-            self.req_api(f'/api/v4/projects/{self.project_id}/labels') or [])  # noqa
+        labels = getattr(self, '_labels', None)
+        self.labels = labels or dict((x['name'], x['id']) for x in
+            self.gitlab_obj.req_api(f'/api/v4/projects/{self.project_id}/labels') or [])  # noqa
         return self.labels
 
     def get_issue_notes(self, iid):
-        r = self.req_api(f'/api/v4/projects/{self.project_id}/issues/{iid}/notes')
+        r = self.gitlab_obj.req_api(f'/api/v4/projects/{self.project_id}/issues/{iid}/notes')
         return r
 
     def get_doing_close_date(self, iid):
@@ -81,6 +82,8 @@ class GitlabProject:
         starts = sorted([x for x in issue_notes if
             x['system'] and x['body'] == f'added ~{label_id} label'  # noqa
         ], key=lambda x: x['id']) or issue_notes[-2:]
+        if not starts:
+            return None, None
 
         ends1 = sorted([x for x in issue_notes if
             x['system'] and x['body'] == 'closed'  # noqa
@@ -95,18 +98,18 @@ class GitlabProject:
         return starts[0]['updated_at'], min(ends, key=lambda x: x['id'])['updated_at'] if ends else None
 
     def list_issues(self):
-        r = self.req_api(f'/api/v4/projects/{self.project_id}/issues?page=1&per_page=100&state=all')
+        r = self.gitlab_obj.req_api(f'/api/v4/projects/{self.project_id}/issues?page=1&per_page=100&state=all')
         for issue in r:
             start, end = self.get_doing_close_date(issue['iid'])
             yield issue, start, end
 
     def update_issue(self, issue, start, end):
         """issue =  {iid: 1, description: "", project_id: 0}"""
-        # gantt_str = ''
-        # if start:
-        #     gantt_str = '%s\n%s%s' % (gantt_str, GANTT_START, start)
-        # if end:
-        #     gantt_str = '%s\n%s%s' % (gantt_str, GANTT_END, end)
+        gantt_str = ''
+        if start:
+            gantt_str = '%s\n%s%s' % (gantt_str, GANTT_START, start)
+        if end:
+            gantt_str = '%s\n%s%s' % (gantt_str, GANTT_END, end)
         if start or end:
             # remove old str
             lines = []
@@ -120,7 +123,7 @@ class GitlabProject:
                     inline_edit = True
             desc_back = '\n'.join(lines)
             desc = '%s\n\n<!--\n下面是issue耗时跟踪不要删\n%s\n-->' % (desc_back, gantt_str)
-            r = self.req_api(f'/api/v4/projects/{issue["project_id"]}/issues/{issue["iid"]}', {"description": desc})
+            r = self.gitlab_obj.req_api(f'/api/v4/projects/{issue["project_id"]}/issues/{issue["iid"]}', {"description": desc})
 
 
 def output_json(data, padding=None):
